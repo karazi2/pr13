@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import 'package:firebase_core/firebase_core.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'pages/home_page.dart';
 import 'pages/favorites_page.dart';
@@ -9,12 +9,19 @@ import 'models/api_service.dart';
 import 'pages/cart_page.dart';
 import 'pages/login_page.dart';
 
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Инициализация Firebase
+  await Firebase.initializeApp();
+
+  // Инициализация Supabase
   await Supabase.initialize(
     url: 'https://ilwuljiadvmuxxdmhdxn.supabase.co',
     anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlsd3VsamlhZHZtdXh4ZG1oZHhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQyOTI3MjQsImV4cCI6MjA0OTg2ODcyNH0.0VWrhS80gBNiGRdUYNR8mVGqvUfe2LkwF6Rwv7dH-HY',
   );
+
   runApp(MyApp());
 }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'login_page.dart';
 import 'orders_page.dart'; // Импортируем OrdersPage
+import 'chat.dart'; // Импортируем ChatPage (страница чата)
 
 class ProfilePage extends StatefulWidget {
   @override
@@ -62,11 +63,44 @@ class _ProfilePageState extends State<ProfilePage> {
           (route) => false,
     );
   }
+  Future<void> _navigateToChat(BuildContext context) async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+
+      if (user == null) {
+        print('Ошибка: пользователь не авторизован.');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Ошибка: пользователь не авторизован')),
+        );
+        return;
+      }
+
+      // Здесь указываем конкретный seller_id вручную
+      final String sellerId = 'a1b2c3d4-e5f6-7890-ab12-cd34ef567890';
+
+      print('Переходим в чат с продавцом ID: $sellerId');
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ChatPage(sellerId: sellerId),
+        ),
+      );
+    } catch (e) {
+      print('Ошибка при переходе в чат: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка при переходе в чат: $e')),
+      );
+    }
+  }
+
+
+
 
   void _navigateToOrders(BuildContext context) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => OrdersPage()), // Переход на OrdersPage
+      MaterialPageRoute(builder: (context) => OrdersPage()),
     );
   }
 
@@ -101,6 +135,11 @@ class _ProfilePageState extends State<ProfilePage> {
             ElevatedButton(
               onPressed: () => _navigateToOrders(context),
               child: const Text('Мои заказы'),
+            ),
+            const SizedBox(height: 10),
+            ElevatedButton(
+              onPressed: () => _navigateToChat(context),
+              child: const Text('Чат с продавцом'),
             ),
           ],
         )
