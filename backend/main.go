@@ -3,12 +3,13 @@ package main
 import (
 
 	"database/sql"
-
+    "time" // Для работы с временем
     "log"
     "net/http"
-
+    "github.com/google/uuid"
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 )
 
 
@@ -100,6 +101,53 @@ func getOrdersHandler(c *gin.Context) {
     c.JSON(http.StatusOK, orders)
 }
 
+func createChatHandler(c *gin.Context) {
+    var request struct {
+        Participants []string `json:"participants"` // Участники чата
+    }
+
+    if err := c.ShouldBindJSON(&request); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректный формат JSON"})
+        return
+    }
+
+    chatID := uuid.New()
+    query := `INSERT INTO chats (id, participants) VALUES ($1, $2)`
+    _, err := db.Exec(query, chatID, pq.Array(request.Participants))
+
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка создания чата"})
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{"message": "Чат создан", "chat_id": chatID})
+}
+func sendMessageHandler(c *gin.Context) {
+	var request struct {
+		ChatID   string `json:"chat_id"`
+		SenderID string `json:"sender_id"`
+		Message  string `json:"message"`
+	}
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректный формат JSON"})
+		return
+	}
+
+	query := `
+		INSERT INTO messages (id, chat_id, sender_id, message, timestamp)
+		VALUES ($1, $2, $3, $4, $5)
+	`
+	messageID := uuid.New().String() // Генерация нового уникального идентификатора для сообщения
+	_, err := db.Exec(query, messageID, request.ChatID, request.SenderID, request.Message, time.Now().Unix())
+	if err != nil {
+		log.Println("Ошибка при добавлении сообщения:", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка отправки сообщения"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Сообщение отправлено"})
+}
 
 func getApartmentsHandler(c *gin.Context) {
 	rows, err := db.Query("SELECT id, title, address, image_link, description, square_meters, bedrooms, price, favourite FROM apartments")
@@ -374,12 +422,119 @@ func toggleFavouriteHandler(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Статус избранного обновлен"})
 }
+// Функция для создания чата или получения существующего
+func createOrGetChatHandler(c *gin.Context) {
+	var request struct {
+		Participants []string `json:"participants"` // Участники чата
+	}
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		log.Println("Ошибка привязки JSON:", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректный формат JSON"})
+		return
+	}
+
+	// ID, которые должны быть "привязаны"
+	const userA = "317ea524-9e31-44ec-a075-fb2d2aff8d54"
+	const userB = "a64e3a3b-dc64-40ec-bbb5-090b2abef034"
+
+	// Логика подстановки:
+	var participantA, participantB string
+
+	if request.Participants[0] == userA {
+		participantA = userA
+		participantB = userB
+	} else {
+		participantA = request.Participants[0]
+		participantB = userA
+	}
+
+	// Проверяем существующий чат
+	var chatID string
+	query := `SELECT id FROM chats WHERE participants @> $1 LIMIT 1`
+    err := db.QueryRow(query, pq.Array([]string{participantA, participantB})).Scan(&chatID)
+
+	if err == nil {
+		// Чат уже существует
+		c.JSON(http.StatusOK, gin.H{"message": "Чат найден", "chat_id": chatID})
+		return
+	}
+
+	// Ошибка кроме ErrNoRows
+	if err != nil && err != sql.ErrNoRows {
+		log.Println("Ошибка при проверке существования чата:", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка проверки чатов"})
+		return
+	}
+
+	// Чат не найден - создаем новый
+	chatID = uuid.New().String()
+	query = `INSERT INTO chats (id, participants) VALUES ($1, $2)`
+	_, err = db.Exec(query, chatID, pq.Array([]string{participantA, participantB}))
+	if err != nil {
+		log.Println("Ошибка при создании чата:", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка создания чата"})
+		return
+	}
+
+	log.Printf("Создан новый чат: %s между %s и %s", chatID, participantA, participantB)
+	c.JSON(http.StatusOK, gin.H{"message": "Чат создан", "chat_id": chatID})
+}
+
+func getMessagesHandler(c *gin.Context) {
+   chatID := c.Param("chat_id")
+    log.Printf("Получен запрос на получение сообщений для chat_id: %s", chatID)
+
+    if chatID == "" {
+        log.Println("Ошибка: chat_id отсутствует в запросе")
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Missing chat_id"})
+        return
+    }
+
+    // Проверяем наличие сообщений
+    log.Println("Выполняем SQL-запрос для получения сообщений")
+    rows, err := db.Query("SELECT sender_id, message, created_at FROM messages WHERE chat_id = $1 ORDER BY created_at", chatID)
+    if err != nil {
+        log.Printf("Ошибка при выполнении SQL-запроса: %v", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error querying messages"})
+        return
+    }
+    defer rows.Close()
+
+    var messages []map[string]interface{}
+    for rows.Next() {
+        var senderID, message string
+        var createdAt time.Time
+        if err := rows.Scan(&senderID, &message, &createdAt); err != nil {
+            log.Printf("Ошибка при сканировании строки: %v", err)
+            c.JSON(http.StatusInternalServerError, gin.H{"error": "Error scanning messages"})
+            return
+        }
+        messages = append(messages, map[string]interface{}{
+            "sender_id": senderID,
+            "message":   message,
+            "created_at": createdAt,
+        })
+    }
+
+    if len(messages) == 0 {
+        log.Printf("Для chat_id=%s сообщений не найдено", chatID)
+        c.JSON(http.StatusNotFound, gin.H{"error": "Messages not found"})
+        return
+    }
+
+    log.Printf("Отправляем %d сообщений для chat_id=%s", len(messages), chatID)
+    c.JSON(http.StatusOK, messages)
+}
+
 
 func main() {
 
 	initDB()
 
 	r := gin.Default()
+
+
 
 	r.GET("/apartments", getApartmentsHandler)
 	r.POST("/apartments/create", createApartmentHandler)
@@ -392,7 +547,10 @@ func main() {
     r.DELETE("/cart/:user_id/:apartment_id", removeFromCartHandler)
     r.POST("/orders", createOrderHandler)
     r.GET("/orders/:user_id", getOrdersHandler)
-
+          // Создать чат
+    r.POST("/messages", sendMessageHandler)    // Отправить сообщение
+    r.GET("/messages/:chat_id", getMessagesHandler) // Получить сообщения
+    r.POST("/chats", createOrGetChatHandler)
 
 	log.Println("Сервер запущен на порту 8080")
 	r.Run(":8080")

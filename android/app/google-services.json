@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "326313579016",
+    "project_id": "karazi",
+    "storage_bucket": "karazi.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:326313579016:android:86413f9776ffaa7a8277bd",
+        "android_client_info": {
+          "package_name": "com.example.pr13"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDK9G8FFrGwCrdZttPPNvQ4FRgkLk8MU4w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
